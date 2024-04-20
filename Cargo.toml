@@ -15,8 +15,6 @@ strip = true
 anyhow = "1.0.82"
 bitflags = "2.5.0"
 crossterm = "0.27.0"
-dirs = "5.0.1"
-regex = "1.10.4"
 textwrap = "0.16.1"
 xflags = "0.3.2"
 lepu = { git = "https://github.com/lessflake/lepu.git" }
