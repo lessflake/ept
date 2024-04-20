@@ -1,5 +1,5 @@
 [package]
-name = "typepub"
+name = "ept"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,18 +8,15 @@ lto = "fat"
 codegen-units = 1
 opt-level = 3
 panic = "abort"
-# strip = true
-debug = true
+strip = true
+# debug = true
 
 [dependencies]
-anyhow = "1.0.71"
-bitflags = "2.3.2"
-crossterm = { git = "https://github.com/crossterm-rs/crossterm/", version = "0.26.1" }
+anyhow = "1.0.82"
+bitflags = "2.5.0"
+crossterm = "0.27.0"
 dirs = "5.0.1"
-regex = "1.9.1"
-roxmltree = "0.18.0"
-simplecss = "0.2.1"
-textwrap = "0.16.0"
-url = "2.4.0"
-xflags = "0.3.1"
-zip = { version = "0.6.6", default-features = false, features = ["deflate"] }
+regex = "1.10.4"
+textwrap = "0.16.1"
+xflags = "0.3.2"
+lepu = { git = "https://github.com/lessflake/lepu.git" }

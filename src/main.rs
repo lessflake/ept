@@ -1,11 +1,9 @@
-use std::{num::NonZeroUsize, path::PathBuf};
+use std::{fs, io, num::NonZeroUsize, path::PathBuf};
 
-use anyhow::Context;
 use crossterm::event::{self, Event, KeyEvent};
-use typepub::{
-    epub::{Directory, Epub, SearchBackend},
-    term::Display,
-};
+use lepu::Epub;
+
+use ept::term::Display;
 
 // TODO: features
 // - nicer virtual styling
@@ -23,45 +21,30 @@ use typepub::{
 
 fn main() -> anyhow::Result<()> {
     xflags::xflags! {
-        cmd typepub {
-            cmd path {
-                /// Path to book.
-                required path: PathBuf
-            }
-            cmd search {
-                /// Book name to search for. Case insensitive.
-                required search: String
-                /// Optional directory to search for books.
-                /// Defaults
-                ///     Unix:    `$HOME/books`
-                ///     Windows: `%HOMEPATH%\Documents\books`
-                optional -l,--library library: PathBuf
-            }
+        cmd ept {
+            /// Path to book.
+            required path: PathBuf
             /// Width of text view, in characters.
-            /// Defaults to 80.
+            /// Defaults to 60.
             optional -w,--width width: NonZeroUsize
         }
     };
 
-    let args = Typepub::from_env()?;
-    let book = match args.subcommand {
-        TypepubCmd::Path(Path { path }) => Epub::from_path(&path)?,
-        TypepubCmd::Search(Search { library, search }) => library
-            .map_or_else(Directory::from_home, Directory::from_path)?
-            .search(&search)?
-            .context("book not found")?,
-    };
+    let args = Ept::from_env()?;
+    let book = fs::read(args.path)
+        .map_err(Into::into)
+        .and_then(Epub::new)?;
 
     let width = args
         .width
         .and_then(|x| x.get().try_into().ok())
-        .unwrap_or(80u16);
+        .unwrap_or(60u16);
 
-    println!("{}'s {}", book.author().unwrap(), book.name());
+    println!("{}'s {}", book.author().unwrap(), book.title());
 
     let (term_w, term_h) = crossterm::terminal::size()?;
 
-    let mut w = std::io::stdout();
+    let mut w = io::stdout();
     let mut display = Display::new(book, width, term_w, term_h);
 
     display.enter(&mut w)?;
@@ -75,7 +58,7 @@ fn main() -> anyhow::Result<()> {
         display.render(&mut w)?;
     }
 
-    display.exit(&mut w)?;
+    Display::exit(&mut w)?;
 
     Ok(())
 }

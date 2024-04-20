@@ -12,15 +12,27 @@ use crossterm::{
     style::{Attribute, Color, ResetColor, SetAttribute, SetForegroundColor},
     terminal,
 };
+use lepu::Epub;
 
 use crate::{
     backend::{Backend, Len},
-    epub::Epub,
     style::Style,
 };
 
-const PARAGRAPH_TERMINATOR: &str = "↵";
-// const PARAGRAPH_TERMINATOR: &str = "¬";
+/* virtual styling
+
+block-level styling
+- center
+- blockquote (nesting..?)
+
+range-based styling
+- bold
+- italic
+
+*/
+
+// const PARAGRAPH_TERMINATOR: &str = "↵";
+const PARAGRAPH_TERMINATOR: &str = "¬";
 // const PARAGRAPH_TERMINATOR: &str = " ";
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -101,7 +113,7 @@ impl Display {
         Ok(())
     }
 
-    pub fn exit(&self, w: &mut impl Write) -> anyhow::Result<()> {
+    pub fn exit(w: &mut impl Write) -> anyhow::Result<()> {
         Self::cleanup(w)?;
         let _ = std::panic::take_hook();
         Ok(())
@@ -131,7 +143,7 @@ impl Display {
             State::ChapterSelect => {
                 queue!(w, cursor::Hide, terminal::Clear(terminal::ClearType::All))?;
 
-                let chapter = self.book.chapters().nth(self.chapter).unwrap();
+                let chapter = self.book.chapter_by_toc_index(self.chapter).unwrap();
                 let depth_offset = 2 * chapter.depth();
                 let wrap_at = self.content_width() as usize - depth_offset;
                 let wrapped = textwrap::wrap(chapter.name(), wrap_at);
@@ -155,12 +167,11 @@ impl Display {
                 let mut above = line - 2;
                 let mut below = line + wrapped.len() as u16 + 1;
 
-                'outer: for chapter in self
-                    .book
-                    .chapters()
-                    .rev()
-                    .skip(self.book.chapter_count() - self.chapter)
-                {
+                let mut cur = self.chapter;
+                'outer: while cur > 0 {
+                    cur -= 1;
+                    let chapter = self.book.chapter_by_toc_index(cur).unwrap();
+
                     let depth_offset = 2 * chapter.depth();
                     let wrap_at = self.content_width() as usize - depth_offset;
                     let wrapped = textwrap::wrap(chapter.name(), wrap_at);
@@ -181,7 +192,12 @@ impl Display {
 
                     above -= u16::try_from(wrapped.len()).unwrap() + 1;
                 }
-                'outer: for chapter in self.book.chapters().skip(self.chapter + 1) {
+
+                cur = self.chapter;
+                'outer: while cur < self.book.chapter_count() {
+                    cur += 1;
+                    let chapter = self.book.chapter_by_toc_index(cur).unwrap();
+
                     let depth_offset = 2 * chapter.depth();
                     let wrap_at = self.content_width() as usize - depth_offset;
                     let wrapped = textwrap::wrap(chapter.name(), wrap_at);
@@ -222,27 +238,24 @@ impl Display {
                 }
             }
         }
+
         match &mut self.state {
-            State::ChapterSelect => match event {
-                KeyEvent {
-                    code: KeyCode::Up | KeyCode::Char('k'),
-                    ..
-                } => self.chapter = self.chapter.saturating_sub(1),
-                KeyEvent {
-                    code: KeyCode::Down | KeyCode::Char('j'),
-                    ..
-                } => {
+            State::ChapterSelect => match event.code {
+                KeyCode::Up | KeyCode::Char('k') => self.chapter = self.chapter.saturating_sub(1),
+                KeyCode::Down | KeyCode::Char('j') => {
                     self.chapter =
                         (self.chapter + 1).min(self.book.chapter_count().saturating_sub(1))
                 }
-                KeyEvent {
-                    code: KeyCode::Enter,
-                    ..
-                } => {
+                KeyCode::Enter => {
+                    let idx = self
+                        .book
+                        .chapter_by_toc_index(self.chapter)
+                        .unwrap()
+                        .index_in_spine();
                     self.state = State::Chapter(ChapterDisplay::enter(
                         Arc::clone(&self.dimensions),
                         &mut self.book,
-                        self.chapter,
+                        idx,
                     ));
                 }
                 _ => {}

@@ -1,13 +1,12 @@
-use crate::{
-    epub::{Content, Epub},
-    style::{Style, Styling},
-};
+use lepu::{Content, Epub};
+
+use crate::style::{Style, Styling};
 
 #[rustfmt::skip]
-const REPLACEMENTS: (&[char], &[&str]) = (
-    &['—', '…'],
-    &["--", "..."],
-);
+const REPLACEMENTS: &[(char, &str)] = &[
+    ('—', "--"),
+    ('…', "..."),
+];
 
 #[rustfmt::skip]
 const ALTERNATIVES: &[(char, &[char])] = &[
@@ -26,33 +25,94 @@ pub struct Backend {
     styling: Styling<Len>,
 }
 
+// struct Node {
+//     range: std::ops::Range<usize>,
+//     kind: BlockStyle,
+//     inner: NodeInner,
+// }
+
+// enum NodeInner {
+//     Internal(Vec<Node>),
+//     Leaf,
+// }
+
+// enum BlockStyle {
+//     Title,
+// }
+
+mod block {
+    use lepu::Align;
+
+    use crate::backend::Len;
+
+    pub struct Block {
+        range: std::ops::Range<Len>,
+        kind: Kind,
+        align: Option<Align>,
+        // It can be a header OR a paragraph OR a blockquote of arbitrary nestedness
+        // any of these can be force aligned left, right, center
+    }
+
+    impl Block {
+        pub fn new(range: std::ops::Range<Len>, kind: Kind, align: Option<Align>) -> Self {
+            Self { range, kind, align }
+        }
+    }
+
+    pub enum Kind {
+        Header,
+        Paragraph,
+        Quote,
+    }
+}
+
 impl Backend {
     pub fn new(book: &mut Epub, chapter: usize) -> Self {
-        let mut text = String::new();
+        let mut buf = String::new();
         let mut char_count = 0;
-        let mut styling = Styling::builder().build();
-        book.traverse(chapter, &REPLACEMENTS, |content, _align| match content {
-            Content::Header(s, stys) | Content::Paragraph(s, stys) | Content::Quote(s, stys) => {
-                if !text.is_empty() {
-                    text.push('\n');
-                    char_count += 1;
-                }
-                styling.add_from_disjoint_other(stys, Len::new(text.len(), char_count));
-                text.push_str(&s);
-                char_count += s.chars().count();
+        let mut styling = Styling::builder();
+        let mut blocks: Vec<block::Block> = Vec::new();
+        book.traverse_chapter_with_replacements(chapter, REPLACEMENTS, |_, content, align| {
+            let text = match content {
+                Content::Textual(text) => text,
+                Content::Image(..) => return,
+            };
+
+            let kind = match text.kind() {
+                lepu::TextKind::Header => block::Kind::Header,
+                lepu::TextKind::Paragraph => block::Kind::Paragraph,
+                lepu::TextKind::Quote => block::Kind::Quote,
+            };
+
+            if !buf.is_empty() {
+                buf.push('\n');
+                char_count += 1;
             }
-            Content::Image => {}
+            let start = Len::new(buf.len(), char_count);
+            let mut cur = start;
+
+            for (s, sty) in text.style_chunks() {
+                let sty = Style::from_bits(sty.bits()).unwrap();
+                let chunk_len = Len::new(s.len(), s.chars().count());
+                buf.push_str(&s);
+                styling.add(sty, cur..cur + chunk_len);
+                char_count += chunk_len.chars;
+                cur += chunk_len;
+            }
+            let end = Len::new(buf.len(), char_count);
+            let block = block::Block::new(start..end, kind, None);
+            blocks.push(block);
         })
         .unwrap();
 
         Self {
-            text,
+            text: buf,
             typed: String::new(),
             cursor: Len::new(0, 0),
             cursor_prev: Len::new(0, 0),
             errors: Vec::new(),
             deleted_errors: Vec::new(),
-            styling,
+            styling: styling.build(),
         }
     }
 
