@@ -1,9 +1,15 @@
-# ept
+<div align="center">
+  <h1>ept</h1>
+  <p>Practice typing while reading books (from the terminal).</p>
+  <p>
+    <figure>
+      <img src="./preview.png" alt="Preview"><br>
+      <figcaption><i>typing errors highlighted in red</i></figcaption>
+    </figure>
+  </p>
+</div>
 
-![Preview](./preview.png)
-*typing errors highlighted in red*
-
-Practice typing while reading books (from the terminal).
+## Usage
 
 ```
 ept
